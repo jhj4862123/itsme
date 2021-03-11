@@ -1,68 +1,92 @@
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
-import java.util.Random;
-public class Board extends JPanel
-    implements ActionListener {
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Toolkit;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.image.BufferedImage;
+import java.io.File;
 
-    private final int B_WIDTH = 1100;
-    private final int B_HEIGHT = 700;
-    private final int INITIAL_X = 0;
-    private final int INITIAL_Y = 660;
-    private final int DELAY = 25;
+import javax.imageio.ImageIO;
+import javax.swing.JPanel;
+import javax.swing.Timer;
 
-    private Image rocket;
-    private Timer timer;
-    private int x;
-    private int y;
-    Random rd = new Random();
+public class Board extends JPanel implements ActionListener, KeyListener {
 
-    public Board() {
-        initBoard();
-    }
+	private Timer timer;
+	private Spaceship ship;
+	private Alien alien;
+	private final int DELAY = 10;
 
-    private void loadImage() {
-        ImageIcon ii = new ImageIcon("C:\\Users\\yeong\\IdeaProjects\\Main\\hw-1\\rocket1.jpg");
-        rocket = ii.getImage();
-    }
+	int e_w, e_h;
+	int m_w, m_h;
+	public Board() {
+		addKeyListener(this);
+		setFocusable(true);
+		setBackground(Color.BLACK);
+		alien = new Alien(500,100);
+		ship = new Spaceship(500, 500);
+		timer = new Timer(DELAY, this);
+		timer.start();
+		e_w = ImageWidthValue("alien.png");
+	}
 
-    private void initBoard() {
-        setBackground(Color.blue);
-        setPreferredSize(new Dimension(B_WIDTH, B_HEIGHT));
-        setDoubleBuffered(true);
+	private int ImageWidthValue(String file) {
+		int x = 0;
+		try {
+			File f = new File(file);
+			BufferedImage bi = ImageIO.read(f);;
+			x = bi.getWidth();
+		}catch (Exception e){}
+		return x;
+		}
+	public int ImageHeightValue(String file){ // 이미지 높이 크기 값 계산
+		int y = 0;
+		try{
+			File f = new File(file);
+			BufferedImage bi = ImageIO.read(f);
+			y = bi.getHeight();
+		}catch(Exception e){}
+		return y;
+	}
 
-        loadImage();
 
-        x = INITIAL_X;
-        y = INITIAL_Y;
-        timer = new Timer(DELAY, this);
-        timer.start();
-    }
+	@Override
+	public void paintComponent(Graphics g) {
+		super.paintComponent(g);
+		Graphics2D g2d = (Graphics2D) g;
+		g2d.drawImage(ship.getImage(), ship.getX(), ship.getY(), this);
+		g2d.drawImage(alien.getImage(), alien.getX(), alien.getY(), this);
 
-    public void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        drawRocket(g);
-    }
+		if( ship.getMissile() != null )
+			g2d.drawImage(ship.getMissile().getImage(), ship.getMissile().getX(), ship.getMissile().getY(), this);
+		Toolkit.getDefaultToolkit().sync();
+	}
 
-    private void drawRocket(Graphics g) {
-        g.drawImage(rocket, x, y, this);
-        Toolkit.getDefaultToolkit().sync();
-    }
+	@Override
+	public void actionPerformed(ActionEvent e) {
 
-    public void actionPerformed(ActionEvent e) {
-        int xs = (rd.nextInt(30));
-        int ys = (rd.nextInt(30));
-            x+=xs;
-            y-=ys;
-            if (y < 10)
-                ys = (-ys);
-            if (y > 650)
-                ys = (+ys);
-            if (x < 0)
-                xs = (+xs);
-            if (x > 1000)
-                xs = (-xs);
-        repaint();
-    }
-    }
+		ship.move();
+		if( ship.getMissile() != null )
+			ship.getMissile().move();
+		repaint();
+	}
 
+	@Override
+	public void keyReleased(KeyEvent e) {
+		ship.keyReleased(e);
+	}
+
+	@Override
+	public void keyPressed(KeyEvent e) {
+		ship.keyPressed(e);
+	}
+
+	@Override
+	public void keyTyped(KeyEvent arg0) {
+	}
+
+}
