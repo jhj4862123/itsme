@@ -1,248 +1,334 @@
-package lalalu;
+package src;
 
-	class ParserException extends Exception {
-		String errStr;
-		public ParserException(String str) {
-			errStr = str;
-		}
-		
-		public String toString() {
-			return errStr;
-		}
-	}
-	
-	class Parser {
-		final int NONE = 0;
-		final int DELIMITER = 1;
-		final int VARIABLE = 2;
-		final int NUMBER = 3;
-		//¿¡·¯Å¸ÀÔ »ó¼ö
-		final int SYNTAX = 0;
-		final int UNBALPARENS = 1;
-		final int NOEXP = 2;
-		final int DIVBYZERO = 3;
-		
-		final String EOE ="\0";
-		
-		private String exp;
-		private int expIdx;
-		public String token;
-		private int tokType;
-		
-		private double vars[] = new double[26]; //¾ËÆÄºª 26±ÛÀÚ
-		
-		public double evaluate(String expstr) throws ParserException
-		{
-			double result;
-			exp = expstr;
-			expIdx = 0;
-			
-			getToken();
-			if(token.equals(EOE))
-				handleErr(NOEXP);
-			
-			result = evalExp2();
-			
-			if(!token.equals(EOE))
-			handleErr(SYNTAX);
-			
-			return result;
-		}
-		
-		private double evalExp2() throws ParserException
-		{
-			char op;
-			double result;
-			double partialResult;
-			result = evalExp3();
-			
-			while((op=token.charAt(0)) == '+' || op == '-') {
-				getToken();
-				partialResult = evalExp3();
-				switch(op) {
-				case '-':
-					result = result - partialResult;
-					break;
-				case '+':
-					result = result + partialResult;
-					break;
-				}
-			}
-			return result;
-		}
-		
-		private double evalExp3() throws ParserException
-		{
-			char op;
-			double result;
-			double partialResult;
-			
-			result = evalExp4();
-			
-			while((op = token.charAt(0)) == '*' || op == '/' || op == '%') {
-				getToken();
-				partialResult = evalExp4();
-				switch(op) {
-				case '*':
-					result = result * partialResult;
-					break;
-				case'/':
-					if(partialResult == 0.0)
-						handleErr(DIVBYZERO);
-					result = result / partialResult;
-					break;
-				case'%':
-					if(partialResult == 0.0)
-						handleErr(DIVBYZERO);
-					result = result % result;
-					break;
-				}
-			}
-			return result;
-		}
-		
-		//Áö¼ö¸¦ Ã³¸®ÇÑ´Ù
-		private double evalExp4() throws ParserException
-		{
-			double result;
-			double partialResult;
-			double ex;
-			int t;
-			
-			result = evalExp5();
-			
-			if(token.equals("^")) {
-				getToken();
-				partialResult = evalExp4();
-				ex = result;
-				if (partialResult == 0.0) {
-					result = 1.0;
-				} else
-					for(t=(int)partialResult-1;t>0;t--)
-						result = result * ex;
-			}
-			return result;
-		}
-		//´ÜÇ×À» Ã³¸®ÇÑ´Ù
-		private double evalExp5() throws ParserException
-		{
-			double result;
-			String op;
-			
-			op="";
-			if((tokType == DELIMITER) && token.equals("+") || token.equals("-")) {
-				op = token;
-				getToken();
-			}
-			result = evalExp6();
-			if(op.equals("-")) result = -result;
-			
-			return result;
-		}
-		
-		//°ıÈ£ Ã³¸®
-		private double evalExp6() throws ParserException
-		{
-			double result;
-			
-			if(token.equals("(")) {
-				getToken();
-				result = evalExp2();
-				if(!token.equals(")"))
-					handleErr(UNBALPARENS);
-				getToken();
-			}
-			else result = atom();
-			
-			return result;
-		}
-		
-		//¼ıÀÚ ¶Ç´Â º¯¼ö °ª
-		private double atom() throws ParserException
-		{
-			double result = 0.0;
-			
-			switch(tokType) {
-			case NUMBER:
-				try {
-					result = Double.parseDouble(token);
-				} catch (NumberFormatException exc) {
-					handleErr(SYNTAX);
-				}
-				getToken();
-				break;
-			case VARIABLE:
-				result = findVar(token);
-				getToken();
-				break;
-			default:
-				handleErr(SYNTAX);
-				break;
-			}
-			return result;
-		}
-		
-		// º¯¼ö °ª ¸®ÅÏ
-		private double findVar(String vname) throws ParserException
-		{
-			if(!Character.isLetter(vname.charAt(0))) {
-				handleErr(SYNTAX);
-				return 0.0;
-			}
-			return vars[Character.toUpperCase(vname.charAt(0))-'A'];
-		}
-		//ÀÔ·Â ½ºÆ®¸² °ª  ¸¸Å­ ÀÎµ¦½º µÇµ¹¸®±â
-		private void putBack()
-		{
-			if(token == EOE ) return;
-			for(int i=0; i<token.length();i++) expIdx--;
-		}
-		//¿¡·¯Ã³¸®
-		private void handleErr(int error) throws ParserException
-		{
-			String[] err = {
-					"Syntax Error",
-					"Unbalanced Parentheses",
-					"No Expression Present",
-					"Division by Zero"
-			};
-			
-			throw new ParserException(err[error]);
-		}
-		
-		//´ÙÀ½ ÅäÅ«°ª
-		private void getToken()
-		{
-			tokType = NONE;
-			token ="";
-			
-		//Ç¥Çö½Ä ³¡ ¿©ºÎ È®ÀÎ
-		if(expIdx == exp.length()) {
-			token = EOE;
-			return;
-		}
-		if(isDelim(exp.charAt(expIdx))) {
-			token += exp.charAt(expIdx);
-			expIdx++;
-			tokType = DELIMITER;
-		}
-		else if(Character.isLetter(exp.charAt(expIdx))) {
-			while(!isDelim(exp.charAt(expIdx))) {
-				token +=exp.charAt(expIdx);
-				expIdx++;
-				if(expIdx>=exp.length()) break;
-			}
-			tokType = NUMBER;
-		}
-		else { // Á¤ÀÇµÇÁö ¾ÊÀº ÇüÀº ¹®ÀÚ¿­ Á¾·á·Î °£ÁÖ
-			token = EOE;
-			return;
-		}
-		}
-		private boolean isDelim(char c)
-		{
-			if(("+-/*%^=()".indexOf(c)!= -1))
-				return true;
-			return false;
-		}
-	}
+import java.util.ArrayList;
+
+class ParserException extends Exception {
+    String errStr; // ì—ëŸ¬ ì²˜ë¦¬
+    public ParserException(String str) {
+        errStr = str;
+    }
+    public String toString() {
+        return errStr;
+    }
+}
+class Parser {
+    // í† í° íƒ€ì… ìƒìˆ˜
+    final int NONE = 0;
+    final int DELIMITER = 1;
+    final int VARIABLE = 2;
+    final int NUMBER = 3;
+    final int STRING = 4;
+    // ì‹ íƒìŠ¤ ì—ëŸ¬ ìƒìˆ˜
+    final int SYNTAX = 0;
+    final int UNBALPARENS = 1;
+    final int NOEXP = 2;
+    final int DIVBYZERO = 3;
+    // í‘œí˜„ì˜ ëì„ ë‚˜íƒ€ëƒ„
+    final String EOE = "\0";
+    private String exp; // í‘œí˜„í•˜ëŠ” ë¬¸ìì—´
+    private int expIdx; // í˜„ì¬ ì¸ë±ìŠ¤ ê°’
+    private int strIdx = 0;
+    private String token; // í˜„ì¬ í† í° ê°’
+    private int tokType; // í† í°ê°’ì˜ ë³€ìˆ˜ íƒ€ì…
+    // ë³€ìˆ˜ ë°°ì—´
+    private double vars[] = new double[26];
+    private String strvars[] = new String[26];
+    private String strvar;
+
+    String s1, s2;
+    private boolean IsitString = false;
+    // íŒŒì„œ ì‹œì‘ë¶€ë¶„
+    public String evaluate(String expstr) throws ParserException
+    {
+        String result;
+        exp = expstr;
+        expIdx = 0;
+        getToken();
+        if(token.equals(EOE))
+            handleErr(NOEXP); // í‘œí˜„ì‹ ì—†ìŒ
+
+        result = evalExp1();
+        if(!token.equals(EOE)) // ë§ˆì§€ë§‰ í† í°ì€ EOEì—¬ì•¼ í•œë‹¤.
+            handleErr(SYNTAX);
+        if(IsitString == true)  {
+            return strvars[strIdx];
+        } else {
+            return String.valueOf(result);
+        }
+    }
+    private String evalExp1() throws ParserException
+    {
+        double result;
+        int varIdx;
+        int ttokType;
+        String temptoken;
+
+        if(tokType == VARIABLE) {
+            temptoken = new String(token);
+            ttokType = tokType;
+            varIdx = Character.toUpperCase(token.charAt(0)) - 'A'; //ì—¬ê¸¸ ê±°ì¹˜ë©´ varIdx ë‹¤ì‹œ 0ë¨
+            getToken();
+            if(!token.equals("=")) {
+                putBack();
+                token = new String(temptoken);
+                tokType = ttokType;
+            }
+            else {
+                getToken();
+                result = evalExp2();
+                vars[varIdx] = result;
+                strvars[strIdx] = strvar;
+                return Double.toString(result);
+            }
+        }
+        return Double.toString(evalExp2());
+    }
+    private double evalExp2() throws ParserException
+    {
+        char op;
+        double result;
+        double partialResult;
+        result = evalExp3();
+        while((op = token.charAt(0)) == '+' || op == '-') {
+            getToken();
+            partialResult = evalExp3();
+            switch(op) {
+                case '-':
+                    result = result - partialResult;
+                    break;
+                case '+':
+                    if (IsitString = true) {
+                        int i = 1;
+                        while(strvars[i] != null) {
+                            s1 = strvars[i];
+                            s2 = strvars[++i];
+                            i++;
+                        }
+                        strIdx++;
+                        strvars[strIdx] = s1 + s2;
+                        return strIdx;
+                    }
+                    else {
+                        result = result + partialResult; }
+                    break;
+            }
+        }
+        return result;
+    }
+    // ê³±í•˜ê¸°, ë‚˜ëˆ„ê¸°
+    private double evalExp3() throws ParserException
+    {
+        char op;
+        double result;
+        double partialResult;
+        result = evalExp4();
+        while((op = token.charAt(0)) == '*' || op == '/' || op == '%') {
+            getToken(); //ë§ˆì§€ë§‰ ìˆ«ì 4 ë¶ˆëŸ¬ì˜´
+            partialResult = evalExp4();
+            switch(op) {
+                case '*':
+                    result = result * partialResult;
+                    break;
+                case '/':
+                    if(partialResult == 0.0)
+                        handleErr(DIVBYZERO);
+                    result = result / partialResult;
+                    break;
+                case '%':
+                    if(partialResult == 0.0)
+                        handleErr(DIVBYZERO);
+                    result = result % partialResult;
+                    break;
+            }
+        }
+        return result;
+    }
+    // ì§€ìˆ˜ì²˜ë¦¬
+    private double evalExp4() throws ParserException
+    {
+        double result;
+        double partialResult;
+        double ex;
+        int t;
+
+        result = evalExp5();
+
+        if(token.equals("^")) {
+            getToken();
+            partialResult = evalExp4();
+            ex = result;
+            if(partialResult == 0.0) {
+                result = 1.0;
+            } else
+                for(t=(int)partialResult-1; t > 0; t--)
+                    result = result * ex;
+        }
+        return result;
+    }
+    // ë‹¨í•­ +,- ì²˜ë¦¬í•˜ê¸°
+    private double evalExp5() throws ParserException
+    {
+        double result;
+        String op;
+
+        op = "";
+        if((tokType == DELIMITER) && token.equals("+") || token.equals("-")) {
+            op = token;
+            getToken();
+        }
+
+        result = evalExp6();
+        if(op.equals("-")) result = -result;
+
+        return result;
+    }
+    // ê´„í˜¸ ì²˜ë¦¬í•˜ê¸°
+    private double evalExp6() throws ParserException
+    {
+        double result;
+
+        if(token.equals("(")) {
+            getToken();
+            result = evalExp2();
+
+            if(!token.equals(")"))
+                handleErr(UNBALPARENS);
+            getToken();
+        }
+        else result = atom();
+        return result;
+    }
+    // ìˆ«ìë‚˜ ë³€ìˆ˜ ê°’ ê°€ì ¸ì˜¤ê¸°
+    private String atom() throws ParserException
+    {
+        ArrayList ary = new ArrayList();
+        int i =0;
+        String[] str = new String[10];
+        String result = 0.0;
+        switch(tokType) {
+            case NUMBER:
+                IsitString = false;
+                try {
+                    result = Double.parseDouble(token);}
+                catch (NumberFormatException exc) {
+                    handleErr(SYNTAX); }
+                getToken();
+                break;
+            case VARIABLE:
+                result = findVar(token);
+                getToken();
+                break;
+            case STRING:
+                IsitString = true;
+                str[i] = token;
+                i++;
+                result = findStr(token);
+                getToken();
+                break;
+
+            default:
+                handleErr(SYNTAX);
+                break;
+        }
+        return result;
+    }
+    private double findStr(String str) throws ParserException {
+        strvar = str;
+        strIdx++;
+        return strIdx;
+    }
+    // ì¸ë±ìŠ¤ ê°’ ë˜ëŒë¦¬ê¸°
+    private void putBack()
+    {
+        if(token == EOE) return;
+        for(int i=0; i < token.length(); i++) expIdx--;
+    }
+    // ì—ëŸ¬ ì²˜ë¦¬í•˜ê¸°
+    private double findVar(String vname) throws ParserException {
+        if(!Character.isLetter(vname.charAt(0))){
+            handleErr(SYNTAX);
+            return 0.0;
+        }
+        return vars[Character.toUpperCase(vname.charAt(0))-'A'];
+    }
+
+    private void handleErr(int error) throws ParserException
+    {
+        String[] err = {
+                "Syntax Error",
+                "Unbalanced Parentheses",
+                "No Expression Present",
+                "Division by Zero",
+        };
+        throw new ParserException(err[error]);
+    }
+
+    // ë‹¤ìŒ í† í°ê°’ ê°€ì ¸ì˜¤ê¸°
+    private void getToken()
+    {
+        tokType = NONE;
+        token = ""; // getToken ë“¤ì–´ì˜¬ë•Œë§ˆë‹¤ ì´ˆê¸°í™”
+// í‘œí˜„ì‹ ëì¸ì§€ ì—¬ë¶€ í™•ì¸
+        if(expIdx == exp.length()) {
+            token = EOE;
+            return;
+        }
+// ê³µë°± ìŠ¤í‚µ
+        while(expIdx < exp.length() && Character.isWhitespace(exp.charAt(expIdx))) ++expIdx; // í‘œí˜„ì‹ ë§ˆì§€ë§‰ ì—¬ë¶€ í™•ì¸
+        if(expIdx == exp.length()) {
+            token = EOE;
+            return;
+        }
+        if(isDelim(exp.charAt(expIdx))) { // ì—°ì‚°ì
+            token += exp.charAt(expIdx);
+            expIdx++;
+            tokType = DELIMITER;
+        }
+        else if(Character.isLetter(exp.charAt(expIdx))) { // ë³€ìˆ˜
+            while(!isDelim(exp.charAt(expIdx))) {
+                token += exp.charAt(expIdx);
+                expIdx++;
+                if(expIdx >= exp.length()) break;
+            }
+            tokType = VARIABLE;
+        }
+        else if(Character.isDigit(exp.charAt(expIdx))) { // ìˆ«ì
+            while(!isDelim(exp.charAt(expIdx))) {
+                token += exp.charAt(expIdx);
+                expIdx++;
+                if(expIdx >= exp.length()) break;
+            }
+            tokType = NUMBER;
+        }
+        else if(isString(exp.charAt(expIdx))) { // ìŠ¤íŠ¸ë§
+            while(!isDelim(exp.charAt(expIdx))) {
+                token += exp.charAt(expIdx);
+                expIdx++;
+                if (exp.charAt(expIdx) == '"') {
+                    expIdx++;
+                    break;
+                }
+            }
+            tokType = STRING;
+        }
+        else { // ëª¨ë¥´ëŠ” í˜•íƒœëŠ” ì¢…ë£Œ
+            token = EOE;
+            return;
+        }
+    }
+    // // trueëŠ” ì—°ì‚°ì ë¬¸ìì´ë‹¤.
+    private boolean isDelim(char c) {
+        if((" +-/*%^=()".indexOf(c) != -1))
+            return true;
+        return false;
+    }
+    private boolean isString(char c) {
+        if (c == '"') {
+            expIdx++;
+            return true;
+        }
+        else
+            return false;
+    }
+
+}
